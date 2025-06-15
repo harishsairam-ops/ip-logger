@@ -1,23 +1,40 @@
-const express = require('express');
-const fs = require('fs');
+const express = require("express");
+const fs = require("fs");
+const path = require("path");
+
 const app = express();
-const port = 3000;
+const PORT = process.env.PORT || 3000;
 
-app.use(express.static('public'));
+// ✅ Middleware to log visitor IPs
+app.use((req, res, next) => {
+  const forwarded = req.headers["x-forwarded-for"];
+  const ip = forwarded ? forwarded.split(",")[0] : req.socket.remoteAddress;
+  const logEntry = `${new Date().toISOString()} - ${ip}\n`;
 
-// Ensure ips.txt exists
-const logFile = 'ips.txt';
-if (!fs.existsSync(logFile)) {
-  fs.writeFileSync(logFile, '');
-}
+  fs.appendFile("ips.txt", logEntry, (err) => {
+    if (err) {
+      console.error("Error writing IP:", err);
+    }
+  });
 
-app.get('/', (req, res) => {
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  console.log(`Visitor IP: ${ip}`);
-  fs.appendFileSync(logFile, `${new Date().toISOString()} - ${ip}\n`);
-  res.sendFile(__dirname + '/public/index.html');
+  next();
 });
 
-app.listen(port, () => {
-  console.log(`IP Logger running at http://localhost:${port}`);
+// ✅ Serve static HTML/CSS/JS from /public folder
+app.use(express.static(path.join(__dirname, "public")));
+
+// ✅ View logged IPs in the browser
+app.get("/view-logs", (req, res) => {
+  fs.readFile("ips.txt", "utf8", (err, data) => {
+    if (err) {
+      return res.send("No logs found or file not created yet.");
+    }
+    res.set("Content-Type", "text/plain");
+    res.send(data);
+  });
+});
+
+// ✅ Start the server
+app.listen(PORT, () => {
+  console.log(`IP Logger running on port ${PORT}`);
 });
